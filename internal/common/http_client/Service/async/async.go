@@ -1,18 +1,20 @@
-package http_client
+package async
 
-type ClientGenerator func() (Client, error)
+import "github.com/sakamotoryou/api-agg-two/internal/common/http_client/Service/client"
+
+type ClientGenerator func() (client.Client, error)
 
 func PrepareClientGenerator(
-	reqFunc ClientRequestFunc,
-	resFunc ClientResponseFunc,
+	reqFunc client.ClientRequestFunc,
+	resFunc client.ClientResponseFunc,
 ) ClientGenerator {
-	return func() (Client, error) {
-		return SendDefault(reqFunc, resFunc)
+	return func() (client.Client, error) {
+		return client.SendDefault(reqFunc, resFunc)
 	}
 }
 
 type ClientAsync struct {
-	Client Client
+	Client client.Client
 	Err    error
 }
 
@@ -31,8 +33,8 @@ func AsyncDefault(
 			}
 
 			select {
-      case <-done:
-        return
+			case <-done:
+				return
 			case clientStream <- c:
 			}
 		}

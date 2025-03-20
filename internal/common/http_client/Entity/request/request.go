@@ -1,4 +1,4 @@
-package http_client
+package request
 
 import (
 	"encoding/json"
@@ -424,44 +424,3 @@ func process(req Request) (func() Request, error) {
 		return req
 	}, nil
 }
-
-// Can be considered a repo layer...
-// Possible move on future stage
-type BulkRequest struct {
-	requests []Request
-	errors   []error
-}
-
-type RequestBulkBuilder func() (Request, error)
-
-func BulkBuild(builds ...RequestBulkBuilder) BulkRequest {
-  requests := make([]Request, len(builds))
-  errors := make([]error, len(builds))
-
-  for i, build := range builds {
-    requests[i], errors[i] = build()
-  }
-
-	return BulkRequest{
-    requests: requests,
-    errors: errors,
-  }
-}
-
-func (br BulkRequest) HasError() bool {
-  for _, v := range br.errors {
-    if v != nil {
-      return true
-    }
-  }
-
-  return false
-}
-
-func (br BulkRequest) Errors() []error {
-  return br.errors
-}
-
-func (br BulkRequest) Requests() []Request {
-  return br.requests
-} 

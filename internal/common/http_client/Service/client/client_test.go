@@ -1,4 +1,4 @@
-package http_client_test
+package client_test
 
 import (
 	"encoding/json"
@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/sakamotoryou/api-agg-two/internal/common/http_client"
+	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/request"
+	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/response"
+	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Service/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,22 +34,25 @@ func TestRequestAndResponseOptions(t *testing.T) {
 		defer server.Close()
 
 		var returnData Data
-		_, err := http_client.SendDefault(
+		_, err := client.SendDefault(
 			// Request prepare statement
-			http_client.PrepareRequest(
-				http_client.Post(),
-				http_client.Json(
+			client.PrepareRequest(
+				request.Post(),
+				request.Json(
 					Data{
 						SomeData: "Hello World",
 					},
 				),
-				http_client.Domain(server.URL),
-				http_client.Path("/api/v1/save-message"),
+				request.Domain(server.URL),
+				request.Path("/api/v1/save-message"),
 			),
 
 			// Response resolver
-			http_client.PrepareResponse(
-				http_client.ResponseFuncBodyBind(&returnData),
+			client.PrepareResponse(
+        response.OnSuccess(
+          response.Decode(&returnData),
+        ),
+        response.OnReject(),
 			),
 		)
 
