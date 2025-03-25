@@ -18,7 +18,7 @@ type ClientAsync struct {
 	Err    error
 }
 
-func AsyncDefault(
+func Async(
 	done <-chan struct{},
 	clientFunc ...ClientGenerator,
 ) <-chan ClientAsync {
@@ -41,4 +41,14 @@ func AsyncDefault(
 	}()
 
 	return clientStream
+}
+
+func Do(clientFunc ...ClientGenerator) <-chan ClientAsync {
+  done := make(chan struct{})
+  defer close(done)
+
+  async_client := Async(done, clientFunc...)
+  for client := range async_client {
+
+  }
 }

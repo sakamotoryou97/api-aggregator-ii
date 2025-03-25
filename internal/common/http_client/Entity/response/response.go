@@ -83,10 +83,6 @@ func NewResponse(ropts ...ResponseFunc) (Response, error) {
 		return Response{}, err
 	}
 
-	if err := resp.Resolve(); err != nil {
-		return Response{}, err
-	}
-
 	return resp, nil
 }
 

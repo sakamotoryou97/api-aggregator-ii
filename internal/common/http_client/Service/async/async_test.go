@@ -72,8 +72,7 @@ func TestAsyncDefaultClient(t *testing.T) {
 			"/api/v1/additional_response":  &additional_response_data,
 			"/api/v1/recommended-response": &recommended_response_data,
 		}
-		async_client := async.AsyncDefault(
-			done,
+		result := async.Do(
 			async.PrepareClientGenerator(
 				client.PrepareRequest(
 					request.Get(),

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/request"
 	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/response"
+	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/retry"
 	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Service/client"
 	"github.com/stretchr/testify/assert"
 )
@@ -34,27 +35,30 @@ func TestRequestAndResponseOptions(t *testing.T) {
 		defer server.Close()
 
 		var returnData Data
-		_, err := client.SendDefault(
-			// Request prepare statement
-			client.PrepareRequest(
-				request.Post(),
-				request.Json(
-					Data{
-						SomeData: "Hello World",
-					},
+		err := client.New("SendHelloWorld").
+			Register(
+				client.BeforeDoRequest(
+					request.Post(),
+					request.Json(
+						Data{
+							SomeData: "Hello World",
+						},
+					),
+					request.Domain(server.URL),
+					request.Path("/api/v1/save-message"),
 				),
-				request.Domain(server.URL),
-				request.Path("/api/v1/save-message"),
-			),
 
-			// Response resolver
-			client.PrepareResponse(
-        response.OnSuccess(
-          response.Decode(&returnData),
-        ),
-        response.OnReject(),
-			),
-		)
+				client.OnDoRequest(
+					retry.Default()...,
+				),
+
+				client.AfterDoRequest(
+					response.OnSuccess(
+						response.Decode(&returnData),
+					),
+					response.OnReject(),
+				),
+			).Send()
 
 		assert.NoError(t, err)
 		assert.EqualValues(t, Data{"Hello World Appended"}, returnData)

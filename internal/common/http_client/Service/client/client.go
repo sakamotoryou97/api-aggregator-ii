@@ -7,29 +7,42 @@ import (
 
 	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/request"
 	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/response"
+	"github.com/sakamotoryou/api-agg-two/internal/common/http_client/Entity/retry"
 )
 
 type (
-	ClientRequestFunc  func() (request.Request, error)
-	ClientResponseFunc func(*http.Response) (response.Response, error)
+	BeforeClientRequest func() (request.Request, error)
+	OnClientRequest     func() (retry.Retry, error)
+	AfterClientRequest  func(*http.Response) (response.Response, error)
 )
 
 type Client struct {
-	Request  request.Request
-	Response response.Response
+	Name  string
+	Event Event
 }
 
-func BuildClient(
-	request_build func() (request.Request, error),
-) (Client, error) {
-	req, err := request_build()
-	if err != nil {
-		return Client{}, err
-	}
+type Event struct {
+	OnResolveBefore BeforeClientRequest
+	OnClientRequest OnClientRequest
+	OnResolveAfter  AfterClientRequest
+}
 
+func New(name string) Client {
 	return Client{
-		Request: req,
-	}, nil
+		Name: name,
+	}
+}
+
+func (c Client) Register(
+	resolve_before BeforeClientRequest,
+	resolve_on_req OnClientRequest,
+	resolve_after AfterClientRequest,
+) Client {
+	e := Event{
+		resolve_before, resolve_on_req, resolve_after,
+	}
+	c.Event = e
+	return c
 }
 
 var (
@@ -37,7 +50,8 @@ var (
 	ErrRequestDo  = errors.New("On sending request fail")
 )
 
-func sender(req request.Request) (*http.Response, error) { http_req, err := http.NewRequest(
+func do(req request.Request) (*http.Response, error) {
+	http_req, err := http.NewRequest(
 		req.GetMethod(),
 		req.GetUrl(),
 		req.GetBodyReader(),
@@ -55,43 +69,54 @@ func sender(req request.Request) (*http.Response, error) { http_req, err := http
 	return http_resp, nil
 }
 
-func Send(
-	reqFunc func() (request.Request, error),
-	respFunc func(*http.Response) (response.Response, error),
-	sendFunc func(request.Request) (*http.Response, error),
-) (Client, error) {
-	req, err := reqFunc()
+func (c Client) Send() error {
+	req, err := c.Event.OnResolveBefore()
 	if err != nil {
-		return Client{}, fmt.Errorf("%w %v", err, "at reqFunc()")
+		return err
 	}
 
-	http_resp, err := sendFunc(req)
+	retry, err := c.Event.OnClientRequest()
 	if err != nil {
-		return Client{}, fmt.Errorf("%w %v", err, "at sendFunc()")
+		return err
 	}
 
-	resp, err := respFunc(http_resp)
-	if err != nil {
-		return Client{}, fmt.Errorf("%w %v", err, "at respFunc()")
+	var result *http.Response
+	for retry.Next() {
+		result, err = do(req)
+		if err != nil {
+			return err
+		}
+
+		retry.ValidateCode(result.StatusCode)
 	}
 
-	return Client{req, resp}, nil
+	resp, err := c.Event.OnResolveAfter(result)
+	if err != nil {
+		return err
+	}
+
+	if err := resp.Resolve(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func SendDefault(
-	reqFunc func() (request.Request, error),
-	respFunc func(*http.Response) (response.Response, error),
-) (Client, error) {
-	return Send(reqFunc, respFunc, sender)
-}
-
-func PrepareRequest(reqFunc ...request.RequestOptions) func() (request.Request, error) {
+func BeforeDoRequest(reqFunc ...request.RequestOptions) BeforeClientRequest {
 	return func() (request.Request, error) {
 		return request.Build(reqFunc...)
 	}
 }
 
-func PrepareResponse(respFunc ...response.ResponseFunc) func(*http.Response) (response.Response, error) {
+func OnDoRequest(retryFunc ...retry.RetryOptions) OnClientRequest {
+	return func() (retry.Retry, error) {
+		return retry.New(
+      retryFunc...,
+    )
+	}
+}
+
+func AfterDoRequest(respFunc ...response.ResponseFunc) AfterClientRequest {
 	return func(resp *http.Response) (response.Response, error) {
 		resp_opts := []response.ResponseFunc{
 			response.ResponseHeader(resp.Header),
